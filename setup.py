@@ -24,8 +24,12 @@ setup(
 		# hos not been tested on Python 3
         # 'Programming Language :: Python :: 3',
 	],
-	scripts = [
-		os.path.join("bin", "talus"),
-	],
+    scripts = [
+            os.path.join("bin", "talus"),
+    ],
+    package_data = {
+        "talus_client": ["adjectives.txt", "nouns.txt"],
+    },
+    include_package_data=True,
     packages=['talus_client', 'talus_client.cmds'],
 )
