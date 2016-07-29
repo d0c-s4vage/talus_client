@@ -1,5 +1,16 @@
 # Talus Client
 
-Talus client is a python client for the [talus](https://github.com/d0c-s4vage/talus) framework.
+## Installation
 
-See the [official talus_client documentation](http://d0c-s4vage.github.io/talus/getting_started.html#id2) for more info.
+Pip install this directory:
+
+	pip install ~/path/to/talus/src/talus_client
+
+This install the `talus_client` module in your python environment and
+will also place the `talus` executable script in your path.
+
+At this point you should be able to run
+
+	talus
+
+And get a listing of the help
