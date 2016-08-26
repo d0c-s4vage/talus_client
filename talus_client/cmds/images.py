@@ -71,8 +71,9 @@ class ImageCmd(TalusCmdBase):
         """
         parts = shlex.split(args)
         search = self._search_terms(parts, user_default_filter=False)
+        search.setdefault("base_image", "null")
 
-        base_images = Image.objects(base_image=None, **search)
+        base_images = Image.objects(**search)
         self._print_snapshot_tree(base_images)
 
     def do_info(self, args):
