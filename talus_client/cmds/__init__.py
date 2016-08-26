@@ -128,6 +128,8 @@ class TalusCmdBase(object,cmd.Cmd):
 
                 if key.endswith("__type") or key.endswith(".type"):
                     key += "_"
+                elif key.endswith("__re"):
+                    key = key.replace("__re", ".$regex")
 
             elif key is not None:
                 # hex conversion

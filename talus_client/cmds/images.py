@@ -3,6 +3,7 @@
 
 import argparse
 import cmd
+from collections import deque
 import os
 import shlex
 import sys
@@ -13,6 +14,7 @@ from talus_client.cmds import TalusCmdBase
 import talus_client.api
 import talus_client.errors as errors
 from talus_client.models import Image,Field
+from talus_client.utils import Colors
 
 class ImageCmd(TalusCmdBase):
     """The Talus images command processor
@@ -32,7 +34,6 @@ class ImageCmd(TalusCmdBase):
             image list
         """
         parts = shlex.split(args)
-
         search = self._search_terms(parts, user_default_filter=False)
 
         if "sort" not in search:
@@ -64,7 +65,16 @@ class ImageCmd(TalusCmdBase):
             ])
 
         print(tabulate(fields, headers=headers))
-    
+
+    def do_tree(self, args):
+        """Show the entire snapshot tree
+        """
+        parts = shlex.split(args)
+        search = self._search_terms(parts, user_default_filter=False)
+
+        base_images = Image.objects(base_image=None, **search)
+        self._print_snapshot_tree(base_images)
+
     def do_info(self, args):
         """List detailed information about an image
 
@@ -119,15 +129,56 @@ class ImageCmd(TalusCmdBase):
 
         print("Snapshot Tree:")
         print("")
-        self._print_snapshot_tree(image)
+        self._print_snapshot_tree([image])
 
-    def _print_snapshot_tree(self, image, indent_level=1):
-        indent = "    " * indent_level
+    def _print_snapshot_tree(self, base_images):
+        lines = []
+        for base_image in base_images:
+            self._get_tree_lines(base_image, lines)
 
-        print(indent + "└─── {} ({})".format(image.name, image.id))
+        max_line_length = len(max(lines, key=lambda x: len(x["text_no_color"]))["text_no_color"])
+
+        header_line = ("{:^" + str(max_line_length) + "}    {:20} {:30} {}").format("image name", "status", "id", "tags")
+        print(header_line)
+        print("-" * len(header_line))
+
+        for line in lines:
+            image = line["image"]
+            status = image.status.setdefault("name", "")
+            if "vnc" in image.status:
+                status = image.status["vnc"]["vnc"]["uri"]
+
+            text_line = line["text"]
+            text_line += (" " * (max_line_length - len(line["text_no_color"])))
+            print((u"{}    {:20} {:30} {}").format(
+                text_line,
+                status,
+                line["image"].id,
+                ",".join(line["image"].tags)
+            ))
+
+    def _get_tree_lines(self, image, lines, indent_level=0):
+        if indent_level == 0:
+            indent = ""
+            indent_no_color = ""
+        else:
+            indent = Colors.OKBLUE + u"└─" + Colors.ENDC
+            indent_no_color = u"└─"
+            if indent_level > 1:
+                indent = ("   " * (indent_level-1)) + indent
+                indent_no_color = ("   " * (indent_level-1)) + indent_no_color
+            indent += " "
+            indent_no_color += " "
+
+        lines.append({
+            "image": image,
+            "text": indent + image.name,
+            "text_no_color": indent_no_color + image.name
+        })
 
         for child in image.children():
-            self._print_snapshot_tree(child, indent_level+1)
+            self._get_tree_lines(child, lines, indent_level+1)
+    
 
     def do_import(self, args):
         """Import an image into Talus
