@@ -42,23 +42,28 @@ class ImageCmd(TalusCmdBase):
             search["num"] = 20
             self.out("showing first 20 results, use --all to see everything")
 
+        headers = [
+            "id",
+            "name",
+            "status",
+            "base_image",
+            "tags",
+        ]
         fields = []
         for image in self._talus_client.image_iter(**search):
             status = image.status["name"]
             if "vnc" in image.status:
-                status +=" ({})".format(image.status["vnc"]["vnc"]["uri"])
+                status = image.status["vnc"]["vnc"]["uri"]
 
             fields.append([
                 image.id,
                 image.name,
                 status,
-                image.tags,
-                self._nice_name(image, "base_image") if image.base_image is not None else None,
-                self._nice_name(image, "os"),
-                image.md5,
+                self._nice_name(image, "base_image", show_id=False) if image.base_image is not None else None,
+                ",".join(image.tags)
             ])
 
-        print(tabulate(fields, headers=Image.headers()))
+        print(tabulate(fields, headers=headers))
     
     def do_info(self, args):
         """List detailed information about an image
@@ -71,7 +76,58 @@ class ImageCmd(TalusCmdBase):
 
             image info "Win 7 Pro"
         """
-        pass
+        if args.strip() == "":
+            raise errors.TalusApiError("you must provide a name/id of an image to show info about it")
+
+        parts = shlex.split(args)
+
+        all_mine = False
+        # this is the default, so just remove this flag and ignore it
+        if "--all-mine" in parts:
+            parts.remove("--all-mine")
+
+        leftover = []
+        image_id_or_name = None
+        search = self._search_terms(parts, out_leftover=leftover)
+        if len(leftover) > 0:
+            image_id_or_name = leftover[0]
+
+        image = self._resolve_one_model(image_id_or_name, Image, search)
+
+        if image is None:
+            raise errors.TalusApiError("could not find talus image with id {!r}".format(
+                image_id_or_name
+            ))
+
+        status = image.status["name"]
+        del image.status["name"]
+        print("""
+           ID: {id}
+         Name: {name}
+       Status: {status}
+         Tags: {tags}
+   Base Image: {base_image}""".format(
+            id = image.id,
+            name = image.name,
+            status = "{}{}".format(
+                status,
+                " ({})".format(image.status) if len(image.status) > 0 else ""
+            ),
+            tags = ", ".join(image.tags),
+            base_image = self._nice_name(image, "base_image") if image.base_image is not None else None,
+        ))
+
+        print("Snapshot Tree:")
+        print("")
+        self._print_snapshot_tree(image)
+
+    def _print_snapshot_tree(self, image, indent_level=1):
+        indent = "    " * indent_level
+
+        print(indent + "└─── {} ({})".format(image.name, image.id))
+
+        for child in image.children():
+            self._print_snapshot_tree(child, indent_level+1)
 
     def do_import(self, args):
         """Import an image into Talus
@@ -362,14 +418,22 @@ class ImageCmd(TalusCmdBase):
         try:
             while image.status["name"] == "delete":
                 time.sleep(1)
+
+                # will error if the model doesn't exist anymore (which is
+                # expected)
                 image.refresh()
 
             if "error" in image.status:
                 self.err("could not delete image due to: " + image.status["error"])
             else:
                 self.ok("image succesfully deleted")
-        except:
-            self.err("could not delete image")
+        except Exception as e:
+            # the model will no longer exist in the database, so image.refresh above
+            # will raise an exception
+            if "model no longer exists" in  str(e):
+                self.ok("image successfully deleted!")
+            else:
+                self.err("could not delete image")
 
     # ----------------------------
     # UTILITY
