@@ -357,6 +357,8 @@ class ImageCmd(TalusCmdBase):
 
                 try:
                     image.timestamps = {"created": time.time()}
+                    if self._talus_user not in image.tags:
+                        image.tags.append(self._talus_user)
                     image.save()
                     self.ok("created new image {}".format(image.id))
                 except errors.TalusApiError as e:
