@@ -40,6 +40,7 @@ class TalusCmdBase(object,cmd.Cmd):
 
     # to be overridden by inheriting classes
     command_name = ""
+    ansi_escape = re.compile(r'\x1b[^m]*m')
 
     def __init__(self, talus_host=None, client=None, user=None):
         """Create a new TalusCmdBase
@@ -60,6 +61,11 @@ class TalusCmdBase(object,cmd.Cmd):
         self._talus_user = user
         if self._talus_host is not None and self._talus_client is None:
             self._talus_client = talus_client.api.TalusClient(self._talus_host, user=self._talus_user)
+
+    def _plain_text(self, text):
+        """Return a plain version of the text with control chars removed
+        """
+        return self.ansi_escape.sub('', text)
     
     def _nice_name(self, model, attr, show_id=True):
         if "name" in model._fields[attr].value:

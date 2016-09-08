@@ -128,16 +128,39 @@ class ImageCmd(TalusCmdBase):
             base_image = self._nice_name(image, "base_image") if image.base_image is not None else None,
         ))
 
+        self._show_image_in_tree(image)
+
+    def _show_image_in_tree(self, image):
+        curr_image = image
+        tree = []
+        curr_image = image
+        while curr_image.base_image is not None:
+            curr_image = Image.find_one(id=curr_image.base_image)
+            tree.append(curr_image)
+        tree.reverse()
+
+        lines = []
+        idx = 0
+        for ancestor_image in tree:
+            self._get_tree_lines(ancestor_image, lines, indent_level=idx, recurse=False)
+            idx += 1
+
+        image.name = Colors.OKGREEN + image.name + Colors.ENDC
+        self._get_tree_lines(image, lines, indent_level=len(tree))
+
+        image.refresh()
+
         print("Snapshot Tree:")
         print("")
-        self._print_snapshot_tree([image])
+        self._print_snapshot_tree([image], lines=lines)
 
-    def _print_snapshot_tree(self, base_images):
-        lines = []
-        for base_image in base_images:
-            self._get_tree_lines(base_image, lines)
+    def _print_snapshot_tree(self, base_images, lines=None):
+        if lines is None:
+            lines = []
+            for base_image in base_images:
+                self._get_tree_lines(base_image, lines)
 
-        max_line_length = len(max(lines, key=lambda x: len(x["text_no_color"]))["text_no_color"])
+        max_line_length = len(max(lines, key=lambda x: len(self._plain_text((x["text"]))))["text"])
 
         header_line = ("{:^" + str(max_line_length) + "}    {:20} {:30} {}").format("image name", "status", "id", "tags")
         print(header_line)
@@ -150,7 +173,7 @@ class ImageCmd(TalusCmdBase):
                 status = image.status["vnc"]["vnc"]["uri"]
 
             text_line = line["text"]
-            text_line += (" " * (max_line_length - len(line["text_no_color"])))
+            text_line += (" " * (max_line_length - len(self._plain_text(line["text"]))))
             print((u"{}    {:20} {:30} {}").format(
                 text_line,
                 status,
@@ -158,27 +181,23 @@ class ImageCmd(TalusCmdBase):
                 ",".join(line["image"].tags)
             ))
 
-    def _get_tree_lines(self, image, lines, indent_level=0):
+    def _get_tree_lines(self, image, lines, indent_level=0, recurse=True):
         if indent_level == 0:
             indent = ""
-            indent_no_color = ""
         else:
-            indent = Colors.OKBLUE + u"└─" + Colors.ENDC
-            indent_no_color = u"└─"
+            indent = Colors.OKBLUE + u"  └──" + Colors.ENDC
             if indent_level > 1:
-                indent = ("   " * (indent_level-1)) + indent
-                indent_no_color = ("   " * (indent_level-1)) + indent_no_color
+                indent = ("     " * (indent_level-1)) + indent
             indent += " "
-            indent_no_color += " "
 
         lines.append({
             "image": image,
             "text": indent + image.name,
-            "text_no_color": indent_no_color + image.name
         })
 
-        for child in image.children():
-            self._get_tree_lines(child, lines, indent_level+1)
+        if recurse:
+            for child in image.children():
+                self._get_tree_lines(child, lines, indent_level+1)
     
 
     def do_import(self, args):
@@ -406,13 +425,13 @@ class ImageCmd(TalusCmdBase):
             return
 
         image = self._talus_client.image_create(
-            image_name                = args.name,
-            base_image_id_or_name    = args.base,
-            os_id                    = args.os,
-            desc                    = args.desc,
-            tags                    = args.tags,
-            vagrantfile                = vagrantfile_contents,
-            user_interaction        = args.interactive
+            image_name            = args.name,
+            base_image_id_or_name = args.base,
+            os_id                 = args.os,
+            desc                  = args.desc,
+            tags                  = args.tags,
+            vagrantfile           = vagrantfile_contents,
+            user_interaction      = args.interactive
         )
 
         self._wait_for_image(image, args.interactive)
@@ -444,6 +463,16 @@ class ImageCmd(TalusCmdBase):
         if args.vagrantfile is not None:
             vagrantfile_contents = args.vagrantfile.read()
 
+        image = self._resolve_one_model(args.image_id_or_name, Image, {})
+        children_snapshots = image.children()
+        if len(children_snapshots) > 0:
+            error_message = "the image {} has dependent snapshots! cannot configure the image".format(
+                args.image_id_or_name
+            )
+            self.err(error_message)
+            self._show_image_in_tree(image)
+            raise errors.TalusApiError(error_message)
+
         image = self._talus_client.image_configure(
             args.image_id_or_name,
             vagrantfile=vagrantfile_contents,
@@ -464,6 +493,15 @@ class ImageCmd(TalusCmdBase):
         id_or_name    The ID or name of the image that is to be deleted
         """
         args = shlex.split(args)
+        image = self._resolve_one_model(args[0], Image, {})
+        if len(image.children()) > 0:
+            error_message = "Cannot delete image {}! it has dependent snapshots!".format(
+                args[0]
+            )
+            self.err(error_message)
+            self._show_image_in_tree(image)
+            raise errors.TalusApiError(error_message)
+
         image = self._talus_client.image_delete(args[0])
 
         if image is None:
