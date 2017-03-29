@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+
 import argparse
 import cmd
 from collections import deque
@@ -13,12 +14,14 @@ import sys
 from tabulate import tabulate
 import textwrap
 
+
 from talus_client.cmds import TalusCmdBase
 import talus_client.api
 import talus_client.errors as errors
 from talus_client.models import *
 import talus_client.utils as utils
 import colorama
+
 
 class CrashesCmd(TalusCmdBase):
     """The talus crash command processor
@@ -51,7 +54,7 @@ class CrashesCmd(TalusCmdBase):
         new_search = {}
         new_search["type"] = "crash"
         for k,v in search.iteritems():
-            if k in root_level_items:
+            if k.split("__")[0] in root_level_items:
                 new_search[k] = v
             else:
                 new_search["data." + k] = v
@@ -219,8 +222,14 @@ class CrashesCmd(TalusCmdBase):
             reg = reg.lower()
             color = colors.popleft()
             reg_colors[reg] = color
-            reg_rows.append([reg, color + "{:8x}".format(val) + colorama.Style.RESET_ALL])
-            reg_rows_no_color.append([reg, "{:8x}".format(val)])
+
+            if isinstance(val, int):
+                reg_rows.append([reg, color + "{:8x}".format(val) + colorama.Style.RESET_ALL])
+                reg_rows_no_color.append([reg, "{:8x}".format(val)])
+            else:
+                reg_rows.append([reg, color + "{}".format(val) + colorama.Style.RESET_ALL])
+                reg_rows_no_color.append([reg, "{}".format(val)])
+
             colors.append(color)
 
         split = int(math.ceil(len(reg_rows)/2.0))

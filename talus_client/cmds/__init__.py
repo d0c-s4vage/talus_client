@@ -68,6 +68,9 @@ class TalusCmdBase(object,cmd.Cmd):
         return self.ansi_escape.sub('', text)
     
     def _nice_name(self, model, attr, show_id=True):
+        if model._fields[attr] is None or model._fields[attr].value is None:
+            return "?"
+
         if "name" in model._fields[attr].value:
             if show_id:
                 return "{} ({})".format(model._fields[attr]["name"], model._fields[attr]["id"])

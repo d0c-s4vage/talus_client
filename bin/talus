@@ -8,6 +8,9 @@ import shlex
 import sys
 import textwrap
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
 from talus_client.cmds import TalusCmd, ENABLED_COMMANDS
 
 import readline

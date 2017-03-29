@@ -235,6 +235,10 @@ class TalusModel(object):
         if res.status_code // 100 != 2:
             raise errors.TalusApiError("Could not delete model", error=res.text)
         self._fields = {}
+
+    def json(self, indent=4):
+        data = json.dumps(self._filtered_fields(), indent=indent)
+        return data
     
     def refresh(self):
         """Refresh the current model

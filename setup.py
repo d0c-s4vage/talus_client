@@ -33,3 +33,4 @@ setup(
     include_package_data=True,
     packages=['talus_client', 'talus_client.cmds'],
 )
+
